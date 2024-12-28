@@ -11,7 +11,7 @@ iptables --insert OUTPUT \
     --jump REJECT
 
 # Create static routes for any ALLOWED_SUBNETS and punch holes in the firewall
-# (ALLOWED_SUBNETS is passed as $1 from entry.sh)
+# (ALLOWED_SUBNETS is passed as $1 from entrypoint.sh)
 default_gateway=$(ip -4 route | awk '$1 == "default" { print $3 }')
 for subnet in ${1//,/ }; do
     ip route add "$subnet" via "$default_gateway"
