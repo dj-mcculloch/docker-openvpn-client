@@ -17,14 +17,21 @@ CONFIG_FILE=${CONFIG_FILE:=}
 KILL_SWITCH=${KILL_SWITCH:=on}
 ALLOWED_SUBNETS=${ALLOWED_SUBNETS:=}
 AUTH_SECRET=${AUTH_SECRET:=}
+config_file=""
 
 echo "[INFO]: Starting Docker OpenVPN Client..."
 
 # Either a specific file name or a pattern.
-if [[ $CONFIG_FILE ]]; then
-    config_file=$(find /config -name "$CONFIG_FILE" 2> /dev/null | sort | shuf -n 1)
+if [[ -d "/config" ]]; then
+    if [[ $CONFIG_FILE ]]; then
+        echo "[INFO]: CONFIG_FILE is set to: $CONFIG_FILE"
+        config_file=$(find /config -name "$CONFIG_FILE" 2> /dev/null | sort | shuf -n 1)
+    else
+        echo "[INFO]: CONFIG_FILE not set, searching for .conf or .ovpn files"
+        config_file=$(find /config -name '*.conf' -o -name '*.ovpn' 2> /dev/null | sort | shuf -n 1)
+    fi
 else
-    config_file=$(find /config -name '*.conf' -o -name '*.ovpn' 2> /dev/null | sort | shuf -n 1)
+    echo "[ERROR]: /config directory does not exist"
 fi
 
 if [[ -z $config_file ]]; then
@@ -33,7 +40,6 @@ if [[ -z $config_file ]]; then
 fi
 
 echo "[INFO]: Using openvpn configuration file: $config_file"
-
 
 openvpn_args=(
     "--config" "$config_file"
