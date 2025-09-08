@@ -22,7 +22,7 @@ You can either pull it from GitHub Container Registry or build it yourself.
 
 To pull it from GitHub Container Registry, run
 ```
-docker pull ghcr.io/dj-mcculloch/openvpn-client
+docker pull ghcr.io/dj-mcculloch/openvpn-client:latest
 ```
 
 To build it yourself, run
