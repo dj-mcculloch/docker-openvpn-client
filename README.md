@@ -90,9 +90,33 @@ services:
 
 ##### Environment variable considerations
 ###### `ALLOWED_SUBNETS`
-If you intend on connecting to containers that use the OpenVPN container's network stack (which you probably do), the container will automatically detect your Docker network and allow traffic from it.
-In most cases, you won't need to set this variable manually. However, if you have a custom network setup or need to allow multiple specific subnets, you can override the auto-detection by setting this variable.
-Regardless of whether or not you're using the kill switch, the entrypoint script also adds routes to each of the allowed subnets to enable network connectivity from outside of Docker.
+This parameter controls which networks can be accessed outside the VPN tunnel while the killswitch is active.
+
+**Auto-detection (recommended):** If unset, the container automatically detects your Docker network and allows traffic to/from it.
+
+**Manual configuration needed for:**
+- **NFS/SMB servers**: Access to network storage outside Docker
+- **Local services**: Databases, APIs, or other services on your LAN  
+- **Multiple networks**: Complex setups requiring access to multiple subnets
+
+**Common use cases:**
+```yaml
+# Media server with NFS storage
+environment:
+  ALLOWED_SUBNETS: 10.10.0.0/24  # Allow access to NFS server at 10.10.0.3
+
+# Development with local database  
+environment:  
+  ALLOWED_SUBNETS: 192.168.1.0/24  # Allow access to local DB server
+
+# Complex network setup
+environment:
+  ALLOWED_SUBNETS: 192.168.1.0/24,10.0.0.0/8,172.16.0.0/12
+```
+
+**Important:** Without proper `ALLOWED_SUBNETS` configuration, containers using `network_mode: service:openvpn-client` may lose access to local services like databases, file servers, or APIs.
+
+The killswitch script validates subnet formats and adds both routing rules and firewall exceptions for each allowed network.
 
 ###### `AUTH_SECRET`
 This variable should point to a file containing your VPN credentials (username on first line, password on second line).
@@ -193,3 +217,35 @@ auth-user-pass credentials.txt
 ```
 
 This will tell OpenVPN to read `credentials.txt` whenever it needs credentials.
+
+#### Container can't reach local services
+**Problem:** Services using the VPN can't connect to local databases, NFS servers, APIs, etc.  
+**Solution:** Add your local network to `ALLOWED_SUBNETS`:
+
+```yaml
+environment:
+  ALLOWED_SUBNETS: 192.168.1.0/24  # Replace with your network
+```
+
+To find your network range, run: `ip route | grep docker0` or check your router settings.
+
+#### NFS/SMB mounts fail
+**Problem:** NFS or SMB volumes can't be mounted when using `network_mode: service:openvpn-client`  
+**Solution:** Ensure the NFS/SMB server's network is in `ALLOWED_SUBNETS`:
+
+```yaml
+environment:
+  ALLOWED_SUBNETS: 10.10.0.0/24  # Replace with your storage network
+```
+
+#### VPN connection issues
+**Problem:** Container starts but VPN doesn't connect  
+**Solutions:**
+1. Check logs: `docker logs openvpn-client`
+2. Verify config file path and permissions
+3. Enable debug logging: `DEBUG: true`
+4. Test with the included test script: `./test-vpn.sh`
+
+#### Killswitch blocking everything  
+**Problem:** All network access is blocked, even local services  
+**Solution:** The killswitch is working correctly! Add necessary networks to `ALLOWED_SUBNETS`.

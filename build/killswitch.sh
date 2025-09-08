@@ -24,10 +24,39 @@ fi
 
 log "Starting killswitch configuration"
 log "Args: allowed_subnets='$1' config_file='$2'"
+log "Environment: DEBUG=${DEBUG:-false}"
 
 set -o errexit
 set -o nounset  
 set -o pipefail
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+validate_subnet() {
+    local subnet="$1"
+    # Basic CIDR format validation (IPv4 only)
+    if [[ $subnet =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]]; then
+        # Extract IP and prefix parts
+        local ip="${subnet%/*}"
+        local prefix="${subnet#*/}"
+        
+        # Validate IP octets (0-255) and prefix (0-32)
+        local IFS='.'
+        local -a octets=($ip)
+        
+        if [[ ${#octets[@]} -eq 4 ]] && [[ $prefix -ge 0 && $prefix -le 32 ]]; then
+            for octet in "${octets[@]}"; do
+                if [[ $octet -lt 0 || $octet -gt 255 ]]; then
+                    return 1
+                fi
+            done
+            return 0
+        fi
+    fi
+    return 1
+}
 
 # =============================================================================
 # Firewall Configuration - Killswitch Rules
@@ -35,7 +64,16 @@ set -o pipefail
 
 configure_firewall() {
     local docker_network
-    docker_network=$(ip -4 -oneline addr show dev eth0 | awk 'NR == 1 { print $4 }' || echo "172.17.0.0/16")
+    # Enhanced Docker network detection with multiple fallbacks
+    docker_network=$(ip -4 -oneline addr show dev eth0 2>/dev/null | awk 'NR == 1 { print $4 }' || 
+                     ip route 2>/dev/null | awk '/docker/ { print $1; exit }' || 
+                     ip route 2>/dev/null | awk '/172\./ { print $1; exit }' || 
+                     echo "172.17.0.0/16")
+    
+    log "Docker network detected: $docker_network"
+    
+    # Store for summary logging
+    DOCKER_NETWORK="$docker_network"
     
     # Wait for network stack to be ready by checking basic connectivity
     log "Waiting for network stack to be ready..."
@@ -131,6 +169,14 @@ configure_allowed_subnets() {
     
     # Add routes and firewall exceptions for each allowed subnet
     for subnet in ${allowed_subnets//,/ }; do
+        # Validate subnet format
+        if ! validate_subnet "$subnet"; then
+            log "WARNING: Invalid subnet format: $subnet (expected format: 192.168.1.0/24)"
+            log "Skipping subnet: $subnet"
+            continue
+        fi
+        
+        log "Processing allowed subnet: $subnet"
         # Add route - expect exit code 2 if route already exists
         if ! ip route add "$subnet" via "$default_gateway" 2>/dev/null; then
             route_exit_code=$?
@@ -159,10 +205,18 @@ configure_allowed_subnets() {
 # Main Execution
 # =============================================================================
 
+# Store docker network for summary
+DOCKER_NETWORK=""
+
 configure_firewall
 configure_allowed_subnets "${1:-}"
 
 log "Firewall configuration completed"
+log "Summary:"
+log "  - VPN tunnel traffic: ALLOWED via tun0"  
+log "  - Docker network traffic: ALLOWED via ${DOCKER_NETWORK:-auto-detected}"
+log "  - Additional subnets: ${1:-none configured}"
+log "  - All other traffic: BLOCKED (killswitch active)"
 
 # =============================================================================
 # VPN Server Access - Allow connections to OpenVPN servers
