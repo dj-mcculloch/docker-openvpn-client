@@ -14,7 +14,7 @@ If you find something that doesn't work or have an idea for a new feature, issue
 
 ## Why?
 Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling.
-It also keeps you from having to install an OpenVPN client on the underlying host. This was forked from [`https://github.com/wfg/docker-openvpn-client`](WFG's archived `docker-openvpn-client`) because I was having issues with the original project and it was no longer being maintained.
+It also keeps you from having to install an OpenVPN client on the underlying host. This was forked from [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client) because I was having issues with the original project and it was no longer being maintained.
 
 ## How do I use it?
 ### Getting the image
