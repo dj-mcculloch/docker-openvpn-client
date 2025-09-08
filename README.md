@@ -1,19 +1,18 @@
 # OpenVPN Client for Docker
 
-A hardened OpenVPN client container built on Chainguard's Wolfi base image. This is a fork of [`https://github.com/wfg/docker-openvpn-client`](WFG's archived `docker-openvpn-client`).
+A hardened OpenVPN client container built on Chainguard's Wolfi base image. This is a fork of [`https://github.com/wfg/docker-openvpn-client`](WFG's archived `docker-openvpn-client`). DISCLAIMER: this project was primarily vibe-coded with Claude Code.
 
 ## What is this and what does it do?
 [`ghcr.io/dj-mcculloch/openvpn-client`](https://github.com/users/dj-mcculloch/packages/container/package/openvpn-client) is a containerized OpenVPN client.
 It has a kill switch built with `iptables` that kills Internet connectivity to the container if the VPN tunnel goes down for any reason.
 
-This image requires you to supply the necessary OpenVPN configuration file(s).
-Because of this, any VPN provider should work.
+This image requires you to supply the necessary OpenVPN configuration file(s). Because of this, any VPN provider should work.
 
 If you find something that doesn't work or have an idea for a new feature, issues and **pull requests are welcome** (however, I'm not promising they will be merged).
 
 ## Why?
 Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling.
-It also keeps you from having to install an OpenVPN client on the underlying host.
+It also keeps you from having to install an OpenVPN client on the underlying host. This was forked from [`https://github.com/wfg/docker-openvpn-client`](WFG's archived `docker-openvpn-client`) because I was having issues with the original project and it was no longer being maintained.
 
 ## How do I use it?
 ### Getting the image
