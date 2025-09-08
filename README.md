@@ -12,9 +12,22 @@ This image requires you to supply the necessary OpenVPN configuration file(s). B
 
 If you find something that doesn't work or have an idea for a new feature, issues and **pull requests are welcome** (however, I'm not promising they will be merged).
 
+## Enhanced Security Features
+This fork includes several security and reliability improvements over the original:
+
+- **Hardened Base Image**: Built on Chainguard's Wolfi base image, which is designed for security with minimal attack surface and no shell access
+- **Automatic Network Detection**: Smart detection of Docker network configuration eliminates manual subnet configuration in most cases
+- **Enhanced Logging**: Comprehensive debug logging with timestamps for better troubleshooting
+- **Improved Connection Verification**: Robust connection establishment verification with configurable timeout and retry logic
+- **Graceful Shutdown**: Proper signal handling ensures clean container shutdown with configurable timeout
+- **Multi-Architecture Support**: Native support for both AMD64 and ARM64 architectures
+- **Comprehensive Testing**: Included test suite validates all aspects of VPN functionality
+
 ## Why?
 Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling.
-It also keeps you from having to install an OpenVPN client on the underlying host. This was forked from [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client) because I was having issues with the original project and it was no longer being maintained.
+It also keeps you from having to install an OpenVPN client on the underlying host. 
+
+This was forked from [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client) because I was having issues with the original project and it was no longer being maintained.
 
 ## How do I use it?
 ### Getting the image
@@ -49,7 +62,7 @@ docker run --detach \
 ```yaml
 services:
   openvpn-client:
-    image: ghcr.io/dj-mcculloch/openvpn-client
+    image: ghcr.io/dj-mcculloch/openvpn-client:latest
     container_name: openvpn-client
     cap_add:
       - NET_ADMIN
@@ -63,17 +76,19 @@ services:
 #### Environment variables
 | Variable | Default (blank is unset) | Description |
 | --- | --- | --- |
-| `ALLOWED_SUBNETS` | | A list of one or more comma-separated subnets (e.g. `192.168.0.0/24,192.168.1.0/24`) to allow outside of the VPN tunnel. |
+| `ALLOWED_SUBNETS` | Auto-detected | A list of one or more comma-separated subnets (e.g. `192.168.0.0/24,192.168.1.0/24`) to allow outside of the VPN tunnel. If unset, the container will auto-detect the Docker network from the eth0 interface. |
 | `AUTH_SECRET` | | Docker secret that contains the credentials for accessing the VPN. |
 | `CONFIG_FILE` | | The OpenVPN configuration file or search pattern. If unset, a random `.conf` or `.ovpn` file will be selected. |
+| `DEBUG` | `false` | Enable debug logging to see detailed container startup and connection information. Set to any "truthy" value[1] to enable. |
 | `KILL_SWITCH` | `on` | Whether or not to enable the kill switch. Set to any "truthy" value[1] to enable. |
 
 [1] "Truthy" values in this context are the following: `true`, `t`, `yes`, `y`, `1`, `on`, `enable`, or `enabled`.
 
 ##### Environment variable considerations
 ###### `ALLOWED_SUBNETS`
-If you intend on connecting to containers that use the OpenVPN container's network stack (which you probably do), **you will probably want to use this variable**.
-Regardless of whether or not you're using the kill switch, the entrypoint script also adds routes to each of the `ALLOWED_SUBNETS` to allow network connectivity from outside of Docker.
+If you intend on connecting to containers that use the OpenVPN container's network stack (which you probably do), the container will automatically detect your Docker network and allow traffic from it.
+In most cases, you won't need to set this variable manually. However, if you have a custom network setup or need to allow multiple specific subnets, you can override the auto-detection by setting this variable.
+Regardless of whether or not you're using the kill switch, the entrypoint script also adds routes to each of the allowed subnets to enable network connectivity from outside of Docker.
 
 ###### `AUTH_SECRET`
 Compose has support for [Docker secrets](https://docs.docker.com/engine/swarm/secrets/#use-secrets-in-compose).
@@ -100,13 +115,62 @@ ports:
 ```
 In both cases, replace `<host_port>` and `<container_port>` with the port used by your connected container.
 
-### Verifying functionality
-Once you have container running `ghcr.io/dj-mcculloch/openvpn-client`, run the following command to spin up a temporary container using `openvpn-client` for networking.
-The `wget -qO - ifconfig.me` bit will return the public IP of the container (and anything else using `openvpn-client` for networking).
-You should see an IP address owned by your VPN provider.
+### Testing your VPN connection
+This repository includes a comprehensive test script that validates all aspects of your VPN container functionality.
+
+#### Using the test script
+The `test-vpn.sh` script performs 7 different tests to ensure your VPN is working correctly:
+
+1. **Container Running** - Verifies the container is up and running
+2. **VPN Connected** - Checks that OpenVPN process is active and tunnel is established
+3. **Tunnel Interface** - Validates the TUN interface has an IP address
+4. **VPN Routing** - Ensures traffic is routed through the VPN tunnel
+5. **Killswitch Active** - Confirms iptables rules are blocking non-VPN traffic
+6. **DNS Resolution** - Tests that DNS queries work through the VPN
+7. **External IP** - Retrieves your external IP and VPN provider information
+
+To run the test script:
+```bash
+# Test default container named 'vpn'
+./test-vpn.sh
+
+# Test a specific container
+./test-vpn.sh openvpn-client
 ```
+
+The script will output colorized results for each test and provide a summary. A successful run looks like:
+```
+VPN Container Test Suite
+Testing container: openvpn-client
+
+Container Running: ✅ PASS
+VPN Connected: ✅ PASS
+Tunnel Interface: ✅ PASS
+VPN Routing: ✅ PASS
+Killswitch Active: ✅ PASS
+DNS Resolution: ✅ PASS
+External IP: ✅ 203.0.113.45
+   Provider: Example VPN Provider
+   ASN: AS12345 Example VPN AS
+   Location: Amsterdam, Netherlands
+
+Results: 7/7 tests passed
+🎉 All tests passed!
+```
+
+#### Quick verification (alternative method)
+If you prefer a simpler verification or want to test how other containers will behave when using the VPN's network stack, you can run this quick check:
+
+```bash
 docker run --rm -it --network=container:openvpn-client alpine wget -qO - ifconfig.me
 ```
+
+This command spins up a temporary Alpine container that uses `openvpn-client` for networking, which simulates how your other containers will connect through the VPN. The command returns the public IP address that external services see, which should match your VPN provider's IP address.
+
+This method is useful for:
+- Quick verification without running the full test suite
+- Testing the exact network configuration your other containers will use
+- Troubleshooting connectivity issues with containers that use the VPN's network stack
 
 ### Troubleshooting
 #### VPN authentication
