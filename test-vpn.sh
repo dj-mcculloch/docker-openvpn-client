@@ -136,4 +136,22 @@ else
     fi
 fi
 
+# External IP overview for all containers
+echo
+echo -e "${BLUE}External IP Overview${NC}"
+echo "Checking external IP addresses of all running containers (as seen by external services):"
+echo
+
+docker ps --format "{{.Names}}" | while IFS= read -r container; do
+    if [ -n "$container" ]; then
+        printf "%-20s " "$container:"
+        ip=$(docker exec "$container" curl -s --connect-timeout 5 ipinfo.io/ip 2>/dev/null || echo "")
+        if [ -n "$ip" ] && echo "$ip" | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' > /dev/null; then
+            echo -e "${GREEN}$ip${NC}"
+        else
+            echo -e "${RED}No IP / curl unavailable${NC}"
+        fi
+    fi
+done
+
 show_summary
