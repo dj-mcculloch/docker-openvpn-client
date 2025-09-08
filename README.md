@@ -42,7 +42,7 @@ docker run --detach \
   --cap-add=NET_ADMIN \
   --device=/dev/net/tun \
   --volume <path/to/config/dir>:/config \
-  ghcr.io/dj-mcculloch/openvpn-client
+  ghcr.io/dj-mcculloch/openvpn-client:latest
 ```
 
 #### `docker-compose`
