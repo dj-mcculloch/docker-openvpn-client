@@ -10,7 +10,7 @@ services:
       # ALLOWED_SUBNETS auto-detected from container network interface
       AUTH_SECRET: /config/credentials.txt
       DEBUG: false
-      KILL_SWITCH: true
+      KILLSWITCH: true
     volumes:
       - ./local:/config
     restart: unless-stopped

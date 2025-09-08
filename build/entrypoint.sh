@@ -67,14 +67,14 @@ log() {
 # =============================================================================
 
 CONFIG_FILE=${CONFIG_FILE:=}
-KILL_SWITCH=${KILL_SWITCH:=on}
+KILLSWITCH=${KILLSWITCH:=on}
 ALLOWED_SUBNETS=${ALLOWED_SUBNETS:=}
 AUTH_SECRET=${AUTH_SECRET:=}
 DEBUG=${DEBUG:=false}
 
 debug "Environment variables:"
 debug "  CONFIG_FILE='$CONFIG_FILE'"
-debug "  KILL_SWITCH='$KILL_SWITCH'"
+debug "  KILLSWITCH='$KILLSWITCH'"
 debug "  ALLOWED_SUBNETS='$ALLOWED_SUBNETS'"
 debug "  AUTH_SECRET='$AUTH_SECRET'"
 debug "  DEBUG='$DEBUG'"
@@ -130,7 +130,7 @@ openvpn_args=(
 )
 
 # Configure killswitch
-if is_enabled "$KILL_SWITCH"; then
+if is_enabled "$KILLSWITCH"; then
     echo "Killswitch enabled"
     openvpn_args+=("--route-up" "/usr/local/bin/killswitch.sh \"${ALLOWED_SUBNETS:-}\" \"$config_file\"")
 else

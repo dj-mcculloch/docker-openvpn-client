@@ -11,7 +11,7 @@ RUN apk add --no-cache \
 COPY --chmod=755 entrypoint.sh killswitch.sh /usr/local/bin/
 
 # Default environment variables
-ENV KILL_SWITCH=on \
+ENV KILLSWITCH=on \
     DEBUG=false
 
 # Improved health check - verify VPN is connected and functional

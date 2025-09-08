@@ -71,7 +71,7 @@ services:
       # ALLOWED_SUBNETS auto-detected from container network interface
       # AUTH_SECRET: /config/credentials.txt  # uncomment if using auth file
       # DEBUG: true  # uncomment for detailed logging
-      KILL_SWITCH: true
+      KILLSWITCH: true
     volumes:
       - <path/to/config/dir>:/config
     restart: unless-stopped
@@ -84,7 +84,7 @@ services:
 | `AUTH_SECRET` | | Path to a file containing your VPN credentials (username on first line, password on second line). |
 | `CONFIG_FILE` | | The OpenVPN configuration file or search pattern. If unset, a random `.conf` or `.ovpn` file will be selected. |
 | `DEBUG` | `false` | Enable debug logging to see detailed container startup and connection information. Set to any "truthy" value[1] to enable. |
-| `KILL_SWITCH` | `on` | Whether or not to enable the kill switch. Set to any "truthy" value[1] to enable. |
+| `KILLSWITCH` | `on` | Whether or not to enable the kill switch. Set to any "truthy" value[1] to enable. |
 
 [1] "Truthy" values in this context are the following: `true`, `t`, `yes`, `y`, `1`, `on`, `enable`, or `enabled`.
 
