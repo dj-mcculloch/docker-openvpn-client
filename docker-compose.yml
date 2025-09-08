@@ -7,8 +7,10 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      ALLOWED_SUBNETS: 192.168.10.0/24
+      # ALLOWED_SUBNETS auto-detected from container network interface
       AUTH_SECRET: /config/credentials.txt
+      DEBUG: false
+      KILL_SWITCH: true
     volumes:
       - ./local:/config
     restart: unless-stopped

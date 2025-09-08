@@ -35,7 +35,7 @@ set -o pipefail
 
 configure_firewall() {
     local docker_network
-    docker_network=$(ip -4 -oneline addr show dev eth0 | awk 'NR == 1 { print $4 }' || echo "172.18.0.0/16")
+    docker_network=$(ip -4 -oneline addr show dev eth0 | awk 'NR == 1 { print $4 }' || echo "172.17.0.0/16")
     
     # Wait for network stack to be ready by checking basic connectivity
     log "Waiting for network stack to be ready..."

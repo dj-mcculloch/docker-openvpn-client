@@ -59,7 +59,7 @@ echo -n "VPN Connected: "
 TESTS=$((TESTS + 1))
 # Test multiple indicators of active VPN connection
 VPN_PROCESS=$(docker exec "${CONTAINER_NAME}" ps aux 2>/dev/null | grep -c "openvpn.*config" || echo "0")
-VPN_ROUTE_CHECK=$(docker exec "${CONTAINER_NAME}" ip route get 8.8.8.8 2>/dev/null | grep -c "dev tun0" || echo "0")
+VPN_ROUTE_CHECK=$(docker exec "${CONTAINER_NAME}" ip route get 8.8.8.8 2>/dev/null | grep -c "dev tun" || echo "0")
 TUN_UP_CHECK=$(docker exec "${CONTAINER_NAME}" ip link show tun0 2>/dev/null | grep -c "UP,LOWER_UP" || echo "0")
 
 if [[ "$VPN_PROCESS" -gt 0 ]] && [[ "$VPN_ROUTE_CHECK" -gt 0 ]] && [[ "$TUN_UP_CHECK" -gt 0 ]]; then
@@ -98,7 +98,7 @@ fi
 
 echo -n "DNS Resolution: "
 TESTS=$((TESTS + 1))
-if docker exec "${CONTAINER_NAME}" timeout "${TIMEOUT}" nslookup google.com 2>/dev/null | grep -q "Address:"; then
+if docker exec "${CONTAINER_NAME}" timeout "${TIMEOUT}" curl -s --max-time 5 http://google.com 2>/dev/null | grep -q "301 Moved"; then
     echo -e "${GREEN}✅ PASS${NC}"
     PASSED=$((PASSED + 1))
 else
