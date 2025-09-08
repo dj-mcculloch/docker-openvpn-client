@@ -1,6 +1,6 @@
 services:
   openvpn-client:
-    image: ghcr.io/wfg/openvpn-client:latest
+    image: ghcr.io/dj-mcculloch/openvpn-client:latest
     container_name: openvpn-client
     cap_add:
       - NET_ADMIN
