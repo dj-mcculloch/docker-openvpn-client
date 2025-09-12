@@ -6,14 +6,22 @@
 # Tests: Container status, VPN connection, tunnel interface, routing, 
 #        killswitch, DNS resolution, and external IP connectivity
 #
-# Usage: ./test-vpn.sh [container_name]
-# Example: ./test-vpn.sh vpn
+# Usage: ./test-vpn.sh <container_name>
+# Example: ./test-vpn.sh openvpn-client
 #
 
 set -o nounset
 set -o pipefail
 
-CONTAINER_NAME="${1:-vpn}"
+# Require container name as parameter
+if [ $# -eq 0 ]; then
+    echo "Error: Container name is required"
+    echo "Usage: $0 <container_name>"
+    echo "Example: $0 openvpn-client"
+    exit 1
+fi
+
+CONTAINER_NAME="$1"
 TIMEOUT=10
 
 # Colors for output
@@ -58,9 +66,19 @@ fi
 echo -n "VPN Connected: "
 TESTS=$((TESTS + 1))
 # Test multiple indicators of active VPN connection
-VPN_PROCESS=$(docker exec "${CONTAINER_NAME}" ps aux 2>/dev/null | grep -c "openvpn.*config" || echo "0")
-VPN_ROUTE_CHECK=$(docker exec "${CONTAINER_NAME}" ip route get 8.8.8.8 2>/dev/null | grep -c "dev tun" || echo "0")
-TUN_UP_CHECK=$(docker exec "${CONTAINER_NAME}" ip link show tun0 2>/dev/null | grep -c "UP,LOWER_UP" || echo "0")
+VPN_PROCESS=$(docker exec "${CONTAINER_NAME}" ps aux 2>/dev/null | grep -c "openvpn.*config" 2>/dev/null || echo "0")
+VPN_ROUTE_CHECK=$(docker exec "${CONTAINER_NAME}" ip route get 8.8.8.8 2>/dev/null | grep -c "dev tun" 2>/dev/null || echo "0")
+TUN_UP_CHECK=$(docker exec "${CONTAINER_NAME}" ip link show tun0 2>/dev/null | grep -c "UP,LOWER_UP" 2>/dev/null || echo "0")
+
+# Ensure variables contain only numbers
+VPN_PROCESS=${VPN_PROCESS//[^0-9]/}
+VPN_ROUTE_CHECK=${VPN_ROUTE_CHECK//[^0-9]/}
+TUN_UP_CHECK=${TUN_UP_CHECK//[^0-9]/}
+
+# Default to 0 if empty
+VPN_PROCESS=${VPN_PROCESS:-0}
+VPN_ROUTE_CHECK=${VPN_ROUTE_CHECK:-0}
+TUN_UP_CHECK=${TUN_UP_CHECK:-0}
 
 if [[ "$VPN_PROCESS" -gt 0 ]] && [[ "$VPN_ROUTE_CHECK" -gt 0 ]] && [[ "$TUN_UP_CHECK" -gt 0 ]]; then
     echo -e "${GREEN}✅ PASS${NC}"

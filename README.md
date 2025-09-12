@@ -6,7 +6,7 @@ A hardened OpenVPN client container built on Chainguard's Wolfi base image. This
 
 ## What is this and what does it do?
 [`ghcr.io/dj-mcculloch/openvpn-client`](https://github.com/dj-mcculloch/docker-openvpn-client/pkgs/container/openvpn-client) is a containerized OpenVPN client.
-It has a kill switch built with `iptables` that kills Internet connectivity to the container if the VPN tunnel goes down for any reason.
+It has a killswitch built with `iptables` that kills Internet connectivity to the container if the VPN tunnel goes down for any reason.
 
 This image requires you to supply the necessary OpenVPN configuration file(s). Because of this, any VPN provider should work.
 
@@ -84,7 +84,7 @@ services:
 | `AUTH_SECRET` | | Path to a file containing your VPN credentials (username on first line, password on second line). |
 | `CONFIG_FILE` | | The OpenVPN configuration file or search pattern. If unset, a random `.conf` or `.ovpn` file will be selected. |
 | `DEBUG` | `false` | Enable debug logging to see detailed container startup and connection information. Set to any "truthy" value[1] to enable. |
-| `KILLSWITCH` | `on` | Whether or not to enable the kill switch. Set to any "truthy" value[1] to enable. |
+| `KILLSWITCH` | `on` | Whether or not to enable the killswitch. Set to any "truthy" value[1] to enable. |
 
 [1] "Truthy" values in this context are the following: `true`, `t`, `yes`, `y`, `1`, `on`, `enable`, or `enabled`.
 
@@ -159,10 +159,7 @@ The `test-vpn.sh` script performs 7 different tests to ensure your VPN is workin
 
 To run the test script:
 ```bash
-# Test default container named 'vpn'
-./test-vpn.sh
-
-# Test a specific container
+# Test a container (container name is required)
 ./test-vpn.sh openvpn-client
 ```
 
