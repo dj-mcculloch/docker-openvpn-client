@@ -2,7 +2,9 @@
 
 [![Build and Push to GHCR](https://github.com/dj-mcculloch/docker-openvpn-client/actions/workflows/build.yaml/badge.svg)](https://github.com/dj-mcculloch/docker-openvpn-client/actions/workflows/build.yaml)
 
-A hardened OpenVPN client container built on Chainguard's Wolfi base image. This is a fork of [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client). DISCLAIMER: this project was primarily vibe-coded with Claude Code.
+A hardened OpenVPN client container built on Chainguard's Wolfi base image. This is a fork of [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client). 
+
+DISCLAIMER: this project was primarily vibe-coded with Claude Code.
 
 ## What is this and what does it do?
 [`ghcr.io/dj-mcculloch/openvpn-client`](https://github.com/dj-mcculloch/docker-openvpn-client/pkgs/container/openvpn-client) is a containerized OpenVPN client.
