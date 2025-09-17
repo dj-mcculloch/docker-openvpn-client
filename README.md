@@ -24,6 +24,7 @@ This fork includes several security and reliability improvements over the origin
 - **Graceful Shutdown**: Proper signal handling ensures clean container shutdown with configurable timeout
 - **Multi-Architecture Support**: Native support for both AMD64 and ARM64 architectures
 - **Comprehensive Testing**: Included test suite validates all aspects of VPN functionality
+- **Advanced Health Checks**: Comprehensive health monitoring ensures traffic is actually routing through VPN before other services start
 
 ## Why?
 Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling. It also keeps you from having to install an OpenVPN client on the underlying host.
@@ -123,6 +124,74 @@ The killswitch script validates subnet formats and adds both routing rules and f
 ###### `AUTH_SECRET`
 This variable should point to a file containing your VPN credentials (username on first line, password on second line).
 See the [Compose file](docker-compose.yml) in this repository for an example of mounting a credentials file into the container.
+
+#### Health Check
+The container includes a comprehensive health check that ensures traffic is actually routing through the VPN tunnel before Docker considers the container "healthy". The health check verifies:
+
+- ✅ **OpenVPN process is running**
+- ✅ **Tunnel interface has an IP address**
+- ✅ **Default route goes through VPN tunnel** (critical for protection!)
+- ✅ **External connectivity works through tunnel**
+- ✅ **DNS resolution works**
+- ✅ **Killswitch is active** (if enabled)
+
+This prevents other containers from starting before the VPN is fully protecting their traffic.
+
+#### Service Dependencies
+To ensure other containers wait for the VPN to be fully protecting traffic, use `depends_on` with `condition: service_healthy`:
+
+```yaml
+services:
+  openvpn-client:
+    image: ghcr.io/dj-mcculloch/openvpn-client:latest
+    container_name: openvpn-client
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      KILLSWITCH: true
+    volumes:
+      - ./config:/config
+    restart: unless-stopped
+    # Health check ensures VPN is routing traffic before other services start
+
+  # Example: Service that routes through VPN
+  sonarr:
+    image: ghcr.io/linuxserver/sonarr
+    container_name: sonarr
+    network_mode: service:openvpn-client  # Route through VPN
+    depends_on:
+      openvpn-client:
+        condition: service_healthy  # Wait for VPN to be fully protecting traffic
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ./sonarr:/config
+      - ./downloads:/downloads
+      - ./tv:/tv
+    restart: unless-stopped
+
+  # Example: Service that doesn't use VPN (normal networking)
+  nginx:
+    image: nginx
+    container_name: nginx
+    ports:
+      - "80:80"
+    # No network_mode = uses default Docker network
+    # No depends_on = starts immediately
+    restart: unless-stopped
+```
+
+**How it works:**
+1. VPN container starts and establishes connection
+2. Health check runs every 30 seconds, verifying traffic routes through tunnel
+3. Once health check passes, dependent services start
+4. Dependent services are immediately protected by the VPN
+
+**No exposure window:** Services like Sonarr will never start with unprotected traffic.
 
 ### Using with other containers
 Once you have your `openvpn-client` container up and running, you can tell other containers to use `openvpn-client`'s network stack which gives them the ability to utilize the VPN tunnel.
