@@ -8,15 +8,14 @@ RUN apk add --no-cache \
     openvpn
 
 # Copy scripts with executable permissions
-COPY --chmod=755 entrypoint.sh killswitch.sh /usr/local/bin/
+COPY --chmod=755 entrypoint.sh killswitch.sh healthcheck.sh /usr/local/bin/
 
 # Default environment variables
 ENV KILL_SWITCH=on \
     DEBUG=false
 
-# Improved health check - verify VPN is connected and functional
-HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
-    CMD pgrep openvpn > /dev/null && \
-        (ip route | grep -q tun || ip route | grep -q tap) || exit 1
+# Comprehensive health check - verify VPN tunnel is routing traffic properly
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=4 \
+    CMD healthcheck.sh
 
 ENTRYPOINT ["entrypoint.sh"]
