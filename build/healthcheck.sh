@@ -39,8 +39,13 @@ fi
 
 # Check 6: Verify killswitch is active (if enabled)
 if [ "${KILLSWITCH:-on}" = "on" ] || [ "${KILLSWITCH}" = "true" ]; then
-    if ! iptables -L OUTPUT | grep -q "tun0" 2>/dev/null; then
-        echo "FAIL: Killswitch not active"
+    # Check for killswitch rules: look for ACCEPT to tun0 and REJECT for non-VPN traffic
+    if ! iptables -L OUTPUT | grep -q "ACCEPT.*tun0" 2>/dev/null; then
+        echo "FAIL: Killswitch not active - no ACCEPT rule for tun0"
+        exit 1
+    fi
+    if ! iptables -L OUTPUT | grep -q "REJECT" 2>/dev/null; then
+        echo "FAIL: Killswitch not active - no REJECT rule found"
         exit 1
     fi
 fi
