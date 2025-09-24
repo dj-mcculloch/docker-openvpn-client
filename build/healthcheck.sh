@@ -31,8 +31,8 @@ if ! timeout 5 curl -s --max-time 3 http://google.com > /dev/null 2>&1; then
     exit 1
 fi
 
-# Check 5: DNS resolution works
-if ! timeout 3 nslookup google.com > /dev/null 2>&1; then
+# Check 5: DNS resolution works (test different domain to verify DNS)
+if ! timeout 5 curl -s --max-time 3 http://github.com > /dev/null 2>&1; then
     echo "FAIL: DNS resolution not working"
     exit 1
 fi
