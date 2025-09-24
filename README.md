@@ -12,21 +12,18 @@ This image requires you to supply the necessary OpenVPN configuration file(s). B
 
 If you find something that doesn't work or have an idea for a new feature, issues and **pull requests are welcome** (however, I'm not promising they will be merged).
 
-<<<<<<< Updated upstream
-=======
 ## Enhanced Security Features
 This fork includes several security and reliability improvements over the original:
 
 - **Hardened Base Image**: Built on Chainguard's Wolfi base image, which is designed for security with minimal attack surface and no shell access
-- **Automatic Network Detection**: Smart detection of Docker network configuration eliminates manual subnet configuration in most cases
-- **Enhanced Logging**: Comprehensive debug logging with timestamps for better troubleshooting
-- **Improved Connection Verification**: Robust connection establishment verification with configurable timeout and retry logic
+- **Automatic Network Detection**: Detection of Docker network configuration eliminates manual subnet configuration in most cases
+- **Enhanced Logging**: Debug logging with timestamps for better troubleshooting
+- **Improved Connection Verification**: Connection establishment verification with configurable timeout and retry logic
 - **Graceful Shutdown**: Proper signal handling ensures clean container shutdown with configurable timeout
 - **Multi-Architecture Support**: Native support for both AMD64 and ARM64 architectures
 - **Comprehensive Testing**: Included test suite validates all aspects of VPN functionality
-- **Advanced Health Checks**: Comprehensive health monitoring ensures traffic is actually routing through VPN before other services start
+- **Advanced Health Checks**: Health monitoring ensures traffic is actually routing through VPN before other services start
 
->>>>>>> Stashed changes
 ## Why?
 Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling.
 It also keeps you from having to install an OpenVPN client on the underlying host. This was forked from [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client) because I was having issues with the original project and it was no longer being maintained.
@@ -95,7 +92,7 @@ Compose has support for [Docker secrets](https://docs.docker.com/engine/swarm/se
 See the [Compose file](docker-compose.yml) in this repository for example usage of passing proxy credentials as Docker secrets.
 
 #### Health Check
-The container includes a comprehensive health check that ensures traffic is actually routing through the VPN tunnel before Docker considers the container "healthy". The health check verifies:
+The container includes a health check that ensures traffic is actually routing through the VPN tunnel before Docker considers the container "healthy". The health check verifies:
 
 - ✅ **OpenVPN process is running**
 - ✅ **Tunnel interface has an IP address**

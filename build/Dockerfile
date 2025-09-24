@@ -14,7 +14,7 @@ COPY --chmod=755 entrypoint.sh killswitch.sh healthcheck.sh /usr/local/bin/
 ENV KILL_SWITCH=on \
     DEBUG=false
 
-# Comprehensive health check - verify VPN tunnel is routing traffic properly
+# Verify VPN tunnel is routing traffic properly
 HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=4 \
     CMD healthcheck.sh
 
