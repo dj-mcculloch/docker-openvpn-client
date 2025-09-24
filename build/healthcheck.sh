@@ -25,22 +25,21 @@ if ! ip route get 8.8.8.8 | grep -q "dev tun" 2>/dev/null; then
     exit 1
 fi
 
-# Check 4: Can actually reach external host through tunnel
-if ! timeout 5 curl -s --max-time 3 http://google.com > /dev/null 2>&1; then
-    echo "FAIL: Cannot reach external hosts through tunnel"
+# Check 4: DNS resolution and external connectivity (if DNS works, connectivity works)
+if ! timeout 10 curl -s --max-time 8 http://google.com > /dev/null 2>&1; then
+    echo "FAIL: DNS resolution and external connectivity not working"
     exit 1
 fi
 
-# Check 5: DNS resolution works
-if ! timeout 3 nslookup google.com > /dev/null 2>&1; then
-    echo "FAIL: DNS resolution not working"
-    exit 1
-fi
-
-# Check 6: Verify killswitch is active (if enabled)
+# Check 5: Verify killswitch is active (if enabled)
 if [ "${KILLSWITCH:-on}" = "on" ] || [ "${KILLSWITCH}" = "true" ]; then
-    if ! iptables -L OUTPUT | grep -q "tun0" 2>/dev/null; then
-        echo "FAIL: Killswitch not active"
+    # Check for killswitch rules: look for ACCEPT to tun0 and REJECT for non-VPN traffic
+    if ! iptables -L OUTPUT -v | grep -q "tun0" 2>/dev/null; then
+        echo "FAIL: Killswitch not active - no tun0 rules found"
+        exit 1
+    fi
+    if ! iptables -L OUTPUT | grep -q "REJECT" 2>/dev/null; then
+        echo "FAIL: Killswitch not active - no REJECT rule found"
         exit 1
     fi
 fi

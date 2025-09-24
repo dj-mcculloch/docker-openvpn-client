@@ -18,13 +18,13 @@ If you find something that doesn't work or have an idea for a new feature, issue
 This fork includes several security and reliability improvements over the original:
 
 - **Hardened Base Image**: Built on Chainguard's Wolfi base image, which is designed for security with minimal attack surface and no shell access
-- **Automatic Network Detection**: Smart detection of Docker network configuration eliminates manual subnet configuration in most cases
-- **Enhanced Logging**: Comprehensive debug logging with timestamps for better troubleshooting
-- **Improved Connection Verification**: Robust connection establishment verification with configurable timeout and retry logic
+- **Automatic Network Detection**: Detection of Docker network configuration eliminates manual subnet configuration in most cases
+- **Enhanced Logging**: Debug logging with timestamps for better troubleshooting
+- **Improved Connection Verification**: Connection establishment verification with configurable timeout and retry logic
 - **Graceful Shutdown**: Proper signal handling ensures clean container shutdown with configurable timeout
 - **Multi-Architecture Support**: Native support for both AMD64 and ARM64 architectures
 - **Comprehensive Testing**: Included test suite validates all aspects of VPN functionality
-- **Advanced Health Checks**: Comprehensive health monitoring ensures traffic is actually routing through VPN before other services start
+- **Advanced Health Checks**: Health monitoring ensures traffic is actually routing through VPN before other services start
 
 ## Why?
 Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling. It also keeps you from having to install an OpenVPN client on the underlying host.
@@ -126,7 +126,7 @@ This variable should point to a file containing your VPN credentials (username o
 See the [Compose file](docker-compose.yml) in this repository for an example of mounting a credentials file into the container.
 
 #### Health Check
-The container includes a comprehensive health check that ensures traffic is actually routing through the VPN tunnel before Docker considers the container "healthy". The health check verifies:
+The container includes a health check that ensures traffic is actually routing through the VPN tunnel before Docker considers the container "healthy". The health check verifies:
 
 - ✅ **OpenVPN process is running**
 - ✅ **Tunnel interface has an IP address**

@@ -53,6 +53,44 @@ echo -e "${BLUE}VPN Container Test Suite${NC}"
 echo -e "${BLUE}Testing container: ${CONTAINER_NAME}${NC}"
 echo
 
+# Check if container is running first
+if ! docker ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+    echo -e "${RED}❌ Container '${CONTAINER_NAME}' is not running${NC}"
+    exit 1
+fi
+
+# Check container health status before running tests
+echo -n "Container Health Status: "
+HEALTH_STATUS=$(docker inspect "${CONTAINER_NAME}" --format='{{.State.Health.Status}}' 2>/dev/null || echo "no-healthcheck")
+
+case "$HEALTH_STATUS" in
+    "healthy")
+        echo -e "${GREEN}✅ Healthy${NC}"
+        ;;
+    "unhealthy")
+        echo -e "${RED}❌ Unhealthy - VPN may not be properly established${NC}"
+        echo "Container is unhealthy. Please wait for it to become healthy before running tests."
+        echo "You can monitor health with: docker inspect ${CONTAINER_NAME} --format='{{.State.Health.Status}}'"
+        exit 1
+        ;;
+    "starting")
+        echo -e "${BLUE}⏳ Starting - Health check in progress${NC}"
+        echo "Container is still starting up. Please wait a few minutes for health check to complete."
+        echo "You can monitor progress with: docker logs ${CONTAINER_NAME}"
+        exit 1
+        ;;
+    "no-healthcheck")
+        echo -e "${BLUE}ℹ️  No health check configured${NC}"
+        echo "Warning: This container doesn't have a health check. Tests may fail if VPN isn't ready."
+        ;;
+    *)
+        echo -e "${RED}❌ Unknown health status: ${HEALTH_STATUS}${NC}"
+        exit 1
+        ;;
+esac
+
+echo
+
 # Core functionality tests
 echo -n "Container Running: "
 TESTS=$((TESTS + 1))
