@@ -11,7 +11,7 @@ RUN apk add --no-cache \
 COPY --chmod=755 entrypoint.sh killswitch.sh healthcheck.sh /usr/local/bin/
 
 # Default environment variables
-ENV KILL_SWITCH=on \
+ENV KILLSWITCH=on \
     DEBUG=false
 
 # Verify VPN tunnel is routing traffic properly
