@@ -85,7 +85,11 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         tag=${GITHUB_REF#refs/tags/}
-        gh release create "$tag" \
-          --repo "$GITHUB_REPOSITORY" \
-          --title "$tag" \
-          --generate-notes
+        if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          echo "Release $tag already exists; skipping."
+        else
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$tag" \
+            --generate-notes
+        fi
