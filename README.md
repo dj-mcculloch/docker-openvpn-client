@@ -2,20 +2,19 @@
 
 [![Build and Push to GHCR](https://github.com/dj-mcculloch/docker-openvpn-client/actions/workflows/build.yaml/badge.svg)](https://github.com/dj-mcculloch/docker-openvpn-client/actions/workflows/build.yaml)
 
-A hardened OpenVPN client container built on Chainguard's Wolfi base image. This is a fork of [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client). DISCLAIMER: this project was primarily vibe-coded with Claude Code.
+A hardened OpenVPN client container built on Chainguard's Wolfi base image. Fork of [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client).
 
 ## What is this and what does it do?
-[`ghcr.io/dj-mcculloch/openvpn-client`](https://github.com/users/dj-mcculloch/packages/container/package/openvpn-client) is a containerized OpenVPN client.
-It has a kill switch built with `iptables` that kills Internet connectivity to the container if the VPN tunnel goes down for any reason.
+[`ghcr.io/dj-mcculloch/openvpn-client`](https://github.com/users/dj-mcculloch/packages/container/package/openvpn-client) is a containerized OpenVPN client with an `iptables`-based kill switch that cuts container internet connectivity if the VPN tunnel goes down.
 
-This image requires you to supply the necessary OpenVPN configuration file(s). Because of this, any VPN provider should work.
+A containerized VPN client lets you use container networking to choose which applications use the VPN instead of setting up split tunnelling, and avoids installing an OpenVPN client on the host.
 
-If you find something that doesn't work or have an idea for a new feature, issues and **pull requests are welcome** (however, I'm not promising they will be merged).
+You supply the OpenVPN configuration file(s), so any VPN provider should work. Issues and PRs are welcome.
 
-## Enhanced Security Features
+## Security Features
 This fork includes several security and reliability improvements over the original:
 
-- **Hardened Base Image**: Built on Chainguard's Wolfi base image, which is designed for security with minimal attack surface and no shell access
+- **Hardened Base Image**: Built on Chainguard's Wolfi base image, designed for security with minimal attack surface and no shell access
 - **Automatic Network Detection**: Detection of Docker network configuration eliminates manual subnet configuration in most cases
 - **Enhanced Logging**: Debug logging with timestamps for better troubleshooting
 - **Improved Connection Verification**: Connection establishment verification with configurable timeout and retry logic
@@ -24,28 +23,20 @@ This fork includes several security and reliability improvements over the origin
 - **Comprehensive Testing**: Included test suite validates all aspects of VPN functionality
 - **Advanced Health Checks**: Health monitoring ensures traffic is actually routing through VPN before other services start
 
-## Why?
-Having a containerized VPN client lets you use container networking to easily choose which applications you want using the VPN instead of having to set up split tunnelling.
-It also keeps you from having to install an OpenVPN client on the underlying host. This was forked from [WFG's archived `docker-openvpn-client`](https://github.com/wfg/docker-openvpn-client) because I was having issues with the original project and it was no longer being maintained.
-
 ## How do I use it?
 ### Getting the image
-You can either pull it from GitHub Container Registry or build it yourself.
-
-To pull it from GitHub Container Registry, run
+Pull from GHCR:
 ```
 docker pull ghcr.io/dj-mcculloch/openvpn-client
 ```
 
-To build it yourself, run
+Or build it yourself:
 ```
 docker build -t ghcr.io/dj-mcculloch/openvpn-client https://github.com/dj-mcculloch/docker-openvpn-client.git#:build
 ```
 
 ### Creating and running a container
-The image requires the container be created with the `NET_ADMIN` capability and `/dev/net/tun` accessible.
-Below are bare-bones examples for `docker run` and Compose; however, you'll probably want to do more than just run the VPN client.
-See the below to learn how to have [other containers use `openvpn-client`'s network stack](#using-with-other-containers).
+The container needs the `NET_ADMIN` capability and access to `/dev/net/tun`. See [Using with other containers](#using-with-other-containers) for how to route other containers through the VPN.
 
 #### `docker run`
 ```
@@ -75,133 +66,58 @@ services:
 #### Environment variables
 | Variable | Default (blank is unset) | Description |
 | --- | --- | --- |
-| `ALLOWED_SUBNETS` | | A list of one or more comma-separated subnets (e.g. `192.168.0.0/24,192.168.1.0/24`) to allow outside of the VPN tunnel. |
-| `AUTH_SECRET` | | Docker secret that contains the credentials for accessing the VPN. |
-| `CONFIG_FILE` | | The OpenVPN configuration file or search pattern. If unset, a random `.conf` or `.ovpn` file will be selected. |
-| `KILL_SWITCH` | `on` | Whether or not to enable the kill switch. Set to any "truthy" value[1] to enable. |
+| `ALLOWED_SUBNETS` | | Comma-separated subnets (e.g. `192.168.0.0/24,192.168.1.0/24`) to allow outside of the VPN tunnel. |
+| `AUTH_SECRET` | | Docker secret containing VPN credentials. |
+| `CONFIG_FILE` | | OpenVPN configuration file or search pattern. If unset, a random `.conf` or `.ovpn` file is selected. |
+| `KILLSWITCH` | `on` | Whether to enable the kill switch. Set to any "truthy" value[1] to enable. |
 
-[1] "Truthy" values in this context are the following: `true`, `t`, `yes`, `y`, `1`, `on`, `enable`, or `enabled`.
+[1] "Truthy" values: `true`, `t`, `yes`, `y`, `1`, `on`, `enable`, `enabled`.
 
-##### Environment variable considerations
-###### `ALLOWED_SUBNETS`
-If you intend on connecting to containers that use the OpenVPN container's network stack (which you probably do), **you will probably want to use this variable**.
-Regardless of whether or not you're using the kill switch, the entrypoint script also adds routes to each of the `ALLOWED_SUBNETS` to allow network connectivity from outside of Docker.
+##### `ALLOWED_SUBNETS`
+If you connect to containers using the OpenVPN container's network stack (which you probably do), **you'll want to set this**. The entrypoint adds routes to each subnet to allow network connectivity from outside Docker.
 
-###### `AUTH_SECRET`
-Compose has support for [Docker secrets](https://docs.docker.com/engine/swarm/secrets/#use-secrets-in-compose).
-See the [Compose file](docker-compose.yml) in this repository for example usage of passing proxy credentials as Docker secrets.
+##### `AUTH_SECRET`
+Compose supports [Docker secrets](https://docs.docker.com/engine/swarm/secrets/#use-secrets-in-compose). See the [Compose file](docker-compose.yml) for example usage.
 
-#### Health Check
-The container includes a health check that ensures traffic is actually routing through the VPN tunnel before Docker considers the container "healthy". The health check verifies:
-
-- ✅ **OpenVPN process is running**
-- ✅ **Tunnel interface has an IP address**
-- ✅ **Default route goes through VPN tunnel** (critical for protection!)
-- ✅ **External connectivity works through tunnel**
-- ✅ **DNS resolution works**
-- ✅ **Killswitch is active** (if enabled)
-
-This prevents other containers from starting before the VPN is fully protecting their traffic.
-
-#### Service Dependencies
-To ensure other containers wait for the VPN to be fully protecting traffic, use `depends_on` with `condition: service_healthy`:
+#### Health check
+The container's health check verifies the OpenVPN process is running, the tunnel interface has an IP, traffic routes through the tunnel, external connectivity works, and (if enabled) the killswitch is active. Other services can wait for this with `depends_on` + `condition: service_healthy` so they never start with unprotected traffic:
 
 ```yaml
 services:
   openvpn-client:
-    image: ghcr.io/dj-mcculloch/openvpn-client:latest
-    container_name: openvpn-client
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    environment:
-      KILLSWITCH: true
-    volumes:
-      - ./config:/config
-    restart: unless-stopped
-    # Health check ensures VPN is routing traffic before other services start
-
-  # Example: Service that routes through VPN
+    # ... as above
   sonarr:
     image: ghcr.io/linuxserver/sonarr
-    container_name: sonarr
-    network_mode: service:openvpn-client  # Route through VPN
+    network_mode: service:openvpn-client
     depends_on:
       openvpn-client:
-        condition: service_healthy  # Wait for VPN to be fully protecting traffic
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/New_York
-    volumes:
-      - ./sonarr:/config
-      - ./downloads:/downloads
-      - ./tv:/tv
-    restart: unless-stopped
-
-  # Example: Service that doesn't use VPN (normal networking)
-  nginx:
-    image: nginx
-    container_name: nginx
-    ports:
-      - "80:80"
-    # No network_mode = uses default Docker network
-    # No depends_on = starts immediately
-    restart: unless-stopped
+        condition: service_healthy
 ```
-
-**How it works:**
-1. VPN container starts and establishes connection
-2. Health check runs every 30 seconds, verifying traffic routes through tunnel
-3. Once health check passes, dependent services start
-4. Dependent services are immediately protected by the VPN
-
-**No exposure window:** Services like Sonarr will never start with unprotected traffic.
 
 ### Using with other containers
-Once you have your `openvpn-client` container up and running, you can tell other containers to use `openvpn-client`'s network stack which gives them the ability to utilize the VPN tunnel.
-There are a few ways to accomplish this depending how how your container is created.
+Once `openvpn-client` is running, other containers can use its network stack:
 
-If your container is being created with
-1. the same Compose YAML file as `openvpn-client`, add `network_mode: service:openvpn-client` to the container's service definition.
-2. a different Compose YAML file than `openvpn-client`, add `network_mode: container:openvpn-client` to the container's service definition.
-3. `docker run`, add `--network=container:openvpn-client` as an option to `docker run`.
+1. Same Compose file as `openvpn-client`: add `network_mode: service:openvpn-client` to the service.
+2. Different Compose file: add `network_mode: container:openvpn-client`.
+3. `docker run`: add `--network=container:openvpn-client`.
 
-Once running and provided your container has `wget` or `curl`, you can run `docker exec <container_name> wget -qO - ifconfig.me` or `docker exec <container_name> curl -s ifconfig.me` to get the public IP of the container and make sure everything is working as expected.
-This IP should match the one of `openvpn-client`.
-
-#### Handling ports intended for connected containers
-If you have a connected container and you need to access a port that container, you'll want to publish that port on the `openvpn-client` container instead of the connected container.
-To do that, add `-p <host_port>:<container_port>` if you're using `docker run`, or add the below snippet to the `openvpn-client` service definition in your Compose file if using `docker-compose`.
-```yaml
-ports:
-  - <host_port>:<container_port>
-```
-In both cases, replace `<host_port>` and `<container_port>` with the port used by your connected container.
-
-### Verifying functionality
-Once you have container running `ghcr.io/dj-mcculloch/openvpn-client`, run the following command to spin up a temporary container using `openvpn-client` for networking.
-The `wget -qO - ifconfig.me` bit will return the public IP of the container (and anything else using `openvpn-client` for networking).
-You should see an IP address owned by your VPN provider.
+To verify, run a container with `wget` or `curl` and check its public IP — it should match `openvpn-client`'s:
 ```
 docker run --rm -it --network=container:openvpn-client alpine wget -qO - ifconfig.me
 ```
 
+#### Handling ports for connected containers
+Publish ports on the `openvpn-client` container, not the connected container. With `docker run`, add `-p <host_port>:<container_port>`; with Compose, add a `ports:` block to the `openvpn-client` service.
+
 ### Troubleshooting
 #### VPN authentication
-Your OpenVPN configuration file may not come with authentication baked in.
-To provide OpenVPN the necessary credentials, create a file (any name will work, but this example will use `credentials.txt`) next to the OpenVPN configuration file with your username on the first line and your password on the second line.
-
-For example:
+If your OpenVPN config doesn't have credentials baked in, create a `credentials.txt` next to the config with username on line 1 and password on line 2:
 ```
 vpn_username
 vpn_password
 ```
 
-In the OpenVPN configuration file, add the following line:
+Then add to the OpenVPN config:
 ```
 auth-user-pass credentials.txt
 ```
-
-This will tell OpenVPN to read `credentials.txt` whenever it needs credentials.

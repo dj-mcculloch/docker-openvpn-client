@@ -57,3 +57,19 @@ jobs:
           IMAGE_VERSION=${{ steps.build-args.outputs.version }}
         tags: ${{ steps.tags.outputs.tags }}
         push: true
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag=${GITHUB_REF#refs/tags/}
+        gh release create "$tag" \
+          --repo "$GITHUB_REPOSITORY" \
+          --title "$tag" \
+          --generate-notes
