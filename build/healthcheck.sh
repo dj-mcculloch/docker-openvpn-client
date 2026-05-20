@@ -4,9 +4,6 @@
 # Ensures VPN tunnel is established and routing traffic properly
 #
 
-# Exit immediately on any failure
-set -e
-
 # Check 1: OpenVPN process is running
 if ! pgrep -f "openvpn.*config" > /dev/null 2>&1; then
     echo "FAIL: OpenVPN process not running"
@@ -26,7 +23,7 @@ if ! ip route get 8.8.8.8 | grep -q "dev tun" 2>/dev/null; then
 fi
 
 # Check 4: DNS resolution and external connectivity (if DNS works, connectivity works)
-if ! timeout 10 curl -s --max-time 8 http://google.com > /dev/null 2>&1; then
+if ! curl -s --max-time 8 http://google.com > /dev/null 2>&1; then
     echo "FAIL: DNS resolution and external connectivity not working"
     exit 1
 fi
