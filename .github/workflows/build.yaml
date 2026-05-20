@@ -4,6 +4,9 @@ on:
   push:
     tags:
     - 'v[0-9]+.[0-9]+.[0-9]+'
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC — refresh base image patches
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,10 +17,23 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+      with:
+        fetch-depth: 0
+
+    - name: Determine target tag
+      id: target
+      run: |
+        if [ "${{ github.event_name }}" = "push" ]; then
+          tag=${GITHUB_REF#refs/tags/}
+        else
+          tag=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          git checkout "$tag"
+        fi
+        echo "tag=$tag" >> $GITHUB_OUTPUT
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
-      
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -34,23 +50,22 @@ jobs:
       with:
         images: ghcr.io/dj-mcculloch/openvpn-client
         tags: |
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+          type=semver,pattern={{version}},value=${{ steps.target.outputs.tag }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ steps.target.outputs.tag }}
+          type=semver,pattern={{major}},value=${{ steps.target.outputs.tag }},enable=${{ !startsWith(steps.target.outputs.tag, 'v0.') }}
 
     - name: Set build arguments
       id: build-args
       run: |
-        ref=${{ github.ref }}
-        vpatch=${ref##refs/*/}
-        patch=${vpatch#v}
+        patch=${{ steps.target.outputs.tag }}
+        patch=${patch#v}
         echo "date=$(date --utc --iso-8601=seconds)" >> $GITHUB_OUTPUT
         echo "version=$patch" >> $GITHUB_OUTPUT
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: "{{defaultContext}}:build"
+        context: ./build
         platforms: linux/amd64,linux/arm64
         build-args: |
           BUILD_DATE=${{ steps.build-args.outputs.date }}
@@ -60,6 +75,7 @@ jobs:
 
   release:
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -15,6 +15,7 @@ You supply the OpenVPN configuration file(s), so any VPN provider should work. I
 This fork includes several security and reliability improvements over the original:
 
 - **Hardened Base Image**: Built on Chainguard's Wolfi base image, designed for security with minimal attack surface and no shell access
+- **Automated Patch Updates**: Image is rebuilt weekly to pull the latest Wolfi base patches under the same version tag, so consumers get current CVE fixes without bumping versions
 - **Automatic Network Detection**: Detection of Docker network configuration eliminates manual subnet configuration in most cases
 - **Enhanced Logging**: Debug logging with timestamps for better troubleshooting
 - **Improved Connection Verification**: Connection establishment verification with configurable timeout and retry logic
