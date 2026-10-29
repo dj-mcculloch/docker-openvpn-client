@@ -7,7 +7,7 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      # ALLOWED_SUBNETS auto-detected from container network interface
+      # ALLOWED_SUBNETS: 192.168.1.0/24   # your LAN, to reach the apps from it
       AUTH_SECRET: /config/credentials.txt
       DEBUG: false
       KILLSWITCH: true

@@ -8,10 +8,11 @@ RUN apk add --no-cache \
     openvpn
 
 # Copy scripts with executable permissions
-COPY --chmod=755 entrypoint.sh killswitch.sh healthcheck.sh /usr/local/bin/
+COPY --chmod=755 entrypoint.sh killswitch.sh healthcheck.sh dns-updown.sh /usr/local/bin/
 
 # Default environment variables
 ENV KILLSWITCH=on \
+    VPN_DNS=on \
     DEBUG=false
 
 # Verify VPN tunnel is routing traffic properly

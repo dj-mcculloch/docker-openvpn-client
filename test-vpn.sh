@@ -3,8 +3,9 @@
 # VPN Container Test Suite
 # Validation of VPN container functionality
 # 
-# Tests: Container status, VPN connection, tunnel interface, routing, 
-#        killswitch, DNS resolution, and external IP connectivity
+# Tests: Container status, VPN connection, tunnel interface, routing,
+#        killswitch, DNS resolution, DNS leak protection, and external IP
+#        connectivity; then prints the external IP of every running container
 #
 # Usage: ./test-vpn.sh <container_name>
 # Example: ./test-vpn.sh openvpn-client
@@ -61,7 +62,7 @@ fi
 
 # Check container health status before running tests
 echo -n "Container Health Status: "
-HEALTH_STATUS=$(docker inspect "${CONTAINER_NAME}" --format='{{.State.Health.Status}}' 2>/dev/null || echo "no-healthcheck")
+HEALTH_STATUS=$(docker inspect "${CONTAINER_NAME}" --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}')
 
 case "$HEALTH_STATUS" in
     "healthy")
@@ -92,33 +93,12 @@ esac
 echo
 
 # Core functionality tests
-echo -n "Container Running: "
-TESTS=$((TESTS + 1))
-if docker ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
-    echo -e "${GREEN}✅ PASS${NC}"
-    PASSED=$((PASSED + 1))
-else
-    echo -e "${RED}❌ FAIL${NC}"
-fi
-
 echo -n "VPN Connected: "
 TESTS=$((TESTS + 1))
-# Test multiple indicators of active VPN connection
-VPN_PROCESS=$(docker exec "${CONTAINER_NAME}" ps aux 2>/dev/null | grep -c "openvpn.*config" 2>/dev/null || echo "0")
-VPN_ROUTE_CHECK=$(docker exec "${CONTAINER_NAME}" ip route get 8.8.8.8 2>/dev/null | grep -c "dev tun" 2>/dev/null || echo "0")
-TUN_UP_CHECK=$(docker exec "${CONTAINER_NAME}" ip link show tun0 2>/dev/null | grep -c "UP,LOWER_UP" 2>/dev/null || echo "0")
-
-# Ensure variables contain only numbers
-VPN_PROCESS=${VPN_PROCESS//[^0-9]/}
-VPN_ROUTE_CHECK=${VPN_ROUTE_CHECK//[^0-9]/}
-TUN_UP_CHECK=${TUN_UP_CHECK//[^0-9]/}
-
-# Default to 0 if empty
-VPN_PROCESS=${VPN_PROCESS:-0}
-VPN_ROUTE_CHECK=${VPN_ROUTE_CHECK:-0}
-TUN_UP_CHECK=${TUN_UP_CHECK:-0}
-
-if [[ "$VPN_PROCESS" -gt 0 ]] && [[ "$VPN_ROUTE_CHECK" -gt 0 ]] && [[ "$TUN_UP_CHECK" -gt 0 ]]; then
+# OpenVPN runs, traffic routes through tun0, and tun0 is up
+if docker exec "${CONTAINER_NAME}" pgrep -x openvpn >/dev/null 2>&1 &&
+   docker exec "${CONTAINER_NAME}" ip route get 8.8.8.8 2>/dev/null | grep -q "dev tun0" &&
+   docker exec "${CONTAINER_NAME}" ip link show tun0 2>/dev/null | grep -q "UP,LOWER_UP"; then
     echo -e "${GREEN}✅ PASS${NC}"
     PASSED=$((PASSED + 1))
 else
@@ -134,15 +114,6 @@ else
     echo -e "${RED}❌ FAIL${NC}"
 fi
 
-echo -n "VPN Routing: "
-TESTS=$((TESTS + 1))
-if docker exec "${CONTAINER_NAME}" ip route show 2>/dev/null | grep -q "dev tun0"; then
-    echo -e "${GREEN}✅ PASS${NC}"
-    PASSED=$((PASSED + 1))
-else
-    echo -e "${RED}❌ FAIL${NC}"
-fi
-
 echo -n "Killswitch Active: "
 TESTS=$((TESTS + 1))
 if docker exec "${CONTAINER_NAME}" iptables -L OUTPUT -v 2>/dev/null | grep -q "tun0"; then
@@ -152,13 +123,37 @@ else
     echo -e "${RED}❌ FAIL${NC}"
 fi
 
+# The DNS checks run in throwaway containers sharing the VPN's network, as
+# the apps do: the VPN container itself may still use Docker's resolver.
+IMAGE=$(docker inspect "${CONTAINER_NAME}" --format '{{.Config.Image}}')
+
 echo -n "DNS Resolution: "
 TESTS=$((TESTS + 1))
-if docker exec "${CONTAINER_NAME}" timeout "${TIMEOUT}" curl -s --max-time 5 http://google.com 2>/dev/null | grep -q "301 Moved"; then
+if DNS_ERR=$(docker run --rm --network "container:${CONTAINER_NAME}" --entrypoint curl "$IMAGE" \
+    -sS --max-time 8 -o /dev/null http://google.com 2>&1); then
     echo -e "${GREEN}✅ PASS${NC}"
     PASSED=$((PASSED + 1))
 else
-    echo -e "${RED}❌ FAIL${NC}"
+    echo -e "${RED}❌ FAIL${NC} (${DNS_ERR})"
+fi
+
+# A container sharing the VPN's network must not reach Docker's resolver,
+# which answers outside the tunnel. Sends one raw DNS query to 127.0.0.11, as
+# root; an answer starts with the query ID 1234.
+echo -n "DNS Leak Protection: "
+TESTS=$((TESTS + 1))
+ANSWER=$(docker run --rm --network "container:${CONTAINER_NAME}" --entrypoint bash "$IMAGE" -c \
+    'exec 3<>/dev/udp/127.0.0.11/53 || exit
+     printf "\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01" >&3
+     timeout 3 head -c 2 <&3 | od -An -tx1' 2>/dev/null | tr -d ' ')
+PROBE_RC=$?
+if [[ $PROBE_RC -ne 0 ]]; then
+    echo -e "${RED}❌ FAIL${NC} (probe container did not run: exit ${PROBE_RC})"
+elif [[ "$ANSWER" == "1234" ]]; then
+    echo -e "${RED}❌ FAIL${NC} (Docker's resolver answered a container sharing the VPN's network)"
+else
+    echo -e "${GREEN}✅ PASS${NC}"
+    PASSED=$((PASSED + 1))
 fi
 
 # External connectivity test with VPN provider information

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # OpenVPN Container Entrypoint
-# Configures and starts OpenVPN with killswitch functionality
+# Sets up routes, the killswitch and DNS, then runs OpenVPN in the foreground.
 #
 
 set -o errexit
@@ -11,51 +11,11 @@ set -o pipefail
 echo "OpenVPN Container starting..."
 
 # =============================================================================
-# Signal handling and cleanup
-# =============================================================================
-
-cleanup() {
-    log "Received shutdown signal, cleaning up..."
-    
-    if [[ ${openvpn_pid:-} ]]; then
-        log "Terminating OpenVPN process (PID: $openvpn_pid)"
-        kill -TERM "$openvpn_pid" 2>/dev/null || true
-        
-        # Wait for graceful shutdown
-        local timeout=10
-        while [[ $timeout -gt 0 ]] && kill -0 "$openvpn_pid" 2>/dev/null; do
-            debug "Waiting for OpenVPN to terminate... ($timeout seconds remaining)"
-            sleep 1
-            ((timeout--))
-        done
-        
-        # Force kill if still running
-        if kill -0 "$openvpn_pid" 2>/dev/null; then
-            log "Force killing OpenVPN process"
-            kill -KILL "$openvpn_pid" 2>/dev/null || true
-        fi
-        
-        log "OpenVPN shutdown complete"
-    fi
-    
-    exit 0
-}
-
-# Handle multiple signals
-trap cleanup TERM INT QUIT
-
-# =============================================================================
 # Helper functions
 # =============================================================================
 
 is_enabled() {
     [[ ${1,,} =~ ^(true|t|yes|y|1|on|enable|enabled)$ ]]
-}
-
-debug() {
-    if is_enabled "${DEBUG:-false}"; then
-        echo "[DEBUG] $*" >&2
-    fi
 }
 
 log() {
@@ -66,135 +26,97 @@ log() {
 # Environment configuration
 # =============================================================================
 
-CONFIG_FILE=${CONFIG_FILE:=}
-KILLSWITCH=${KILLSWITCH:=on}
-ALLOWED_SUBNETS=${ALLOWED_SUBNETS:=}
-AUTH_SECRET=${AUTH_SECRET:=}
-DEBUG=${DEBUG:=false}
-
-debug "Environment variables:"
-debug "  CONFIG_FILE='$CONFIG_FILE'"
-debug "  KILLSWITCH='$KILLSWITCH'"
-debug "  ALLOWED_SUBNETS='$ALLOWED_SUBNETS'"
-debug "  AUTH_SECRET='$AUTH_SECRET'"
-debug "  DEBUG='$DEBUG'"
+CONFIG_FILE=${CONFIG_FILE:-}
+KILLSWITCH=${KILLSWITCH:-on}
+ALLOWED_SUBNETS=${ALLOWED_SUBNETS:-}
+AUTH_SECRET=${AUTH_SECRET:-}
+VPN_DNS=${VPN_DNS:-on}
+DEBUG=${DEBUG:-false}
 
 # =============================================================================
 # Configuration file discovery
 # =============================================================================
 
-# Validate /config directory exists
 if [[ ! -d /config ]]; then
     log "ERROR: /config directory not found or not mounted" >&2
     exit 1
 fi
 
 if [[ $CONFIG_FILE ]]; then
-    debug "Searching for specified config file: $CONFIG_FILE"
-    config_file=$(find /config -name "$CONFIG_FILE" 2>/dev/null | head -1)
+    config_file=$(find /config -name "$CONFIG_FILE" -print -quit 2>/dev/null)
     if [[ -z $config_file ]]; then
         log "ERROR: Specified config file '$CONFIG_FILE' not found in /config" >&2
         exit 1
     fi
     log "Using specified config file: $config_file"
 else
-    log "Auto-discovering OpenVPN config files in /config..."
-    config_file=$(find /config -name '*.conf' -o -name '*.ovpn' 2>/dev/null | head -1)
+    config_file=$(find /config \( -name '*.conf' -o -name '*.ovpn' \) -print -quit 2>/dev/null)
     if [[ -z $config_file ]]; then
         log "ERROR: No OpenVPN configuration file (.conf/.ovpn) found in /config" >&2
-        debug "Available files in /config:"
-        debug "$(find /config -type f 2>/dev/null | head -10)"
         exit 1
     fi
     log "Auto-discovered config: $config_file"
 fi
 
-# Validate config file is readable
 if [[ ! -r $config_file ]]; then
     log "ERROR: Configuration file is not readable: $config_file" >&2
     exit 1
 fi
 
-debug "Config file validation passed"
+# persist-tun keeps the tunnel and its routes up across reconnects. When the
+# server's hostname then resolves to a new IP, that IP routes into the dead
+# tunnel ("Recursive routing detected") and the client never reconnects. Run a
+# copy of the config without it; the killswitch still blocks traffic while the
+# tunnel is down.
+runtime_config=/tmp/openvpn.conf
+grep -v -E '^[[:space:]]*persist-tun([[:space:]]|$)' "$config_file" > "$runtime_config"
 
 # =============================================================================
-# OpenVPN configuration
+# Network setup, before OpenVPN starts so nothing leaks while it connects
 # =============================================================================
+
+# The VPN's redirect-gateway sends everything into the tunnel; route
+# ALLOWED_SUBNETS around it through Docker's gateway.
+gateway=$(ip -4 route | awk '$1 == "default" { print $3; exit }')
+for subnet in ${ALLOWED_SUBNETS//,/ }; do
+    ip route replace "$subnet" via "$gateway"
+done
+
+if is_enabled "$KILLSWITCH"; then
+    /usr/local/bin/killswitch.sh "$runtime_config" "$ALLOWED_SUBNETS"
+else
+    log "Killswitch disabled"
+fi
 
 openvpn_args=(
-    "--config" "$config_file"
-    "--cd" "/config"
-    "--script-security" "2"
-    "--route-delay" "5"
-    "--verb" "4"
+    --config "$runtime_config"
+    --cd /config
+    --script-security 2
+    --verb "$(is_enabled "$DEBUG" && echo 4 || echo 3)"
 )
 
-# Configure killswitch
-if is_enabled "$KILLSWITCH"; then
-    echo "Killswitch enabled"
-    openvpn_args+=("--route-up" "/usr/local/bin/killswitch.sh \"${ALLOWED_SUBNETS:-}\" \"$config_file\"")
+if is_enabled "$VPN_DNS"; then
+    # Close Docker's resolver to the other containers in this network before
+    # OpenVPN starts, and restore resolv.conf if a previous run changed it
+    script_type=dns-down /usr/local/bin/dns-updown.sh
+    openvpn_args+=(--dns-updown /usr/local/bin/dns-updown.sh)
 else
-    echo "Killswitch disabled"
+    log "VPN DNS disabled: lookups use Docker's resolver, outside the tunnel"
+    openvpn_args+=(--dns-updown disable)
 fi
 
-# Configure authentication
 if [[ $AUTH_SECRET ]]; then
-    if [[ ! -f "$AUTH_SECRET" ]]; then
-        echo "ERROR: AUTH_SECRET file not found: $AUTH_SECRET" >&2
+    if [[ ! -f $AUTH_SECRET ]]; then
+        log "ERROR: AUTH_SECRET file not found: $AUTH_SECRET" >&2
         exit 1
     fi
-    echo "Using authentication file: $AUTH_SECRET"
-    openvpn_args+=("--auth-user-pass" "$AUTH_SECRET")
+    openvpn_args+=(--auth-user-pass "$AUTH_SECRET")
 fi
 
 # =============================================================================
-# Connection health verification
+# Start OpenVPN (as PID 1: it handles SIGTERM itself, and if it exits the
+# container exits, so Docker's restart policy applies)
 # =============================================================================
 
-verify_connection() {
-    local max_attempts=30
-    local attempt=1
-    
-    log "Verifying VPN connection establishment..."
-    
-    while [[ $attempt -le $max_attempts ]]; do
-        if pgrep -f openvpn > /dev/null; then
-            if ip route | grep -q tun || ip route | grep -q tap; then
-                log "VPN connection established successfully"
-                debug "VPN routes: $(ip route | grep -E '(tun|tap)')"
-                return 0
-            fi
-        fi
-        
-        debug "Connection attempt $attempt/$max_attempts - waiting for VPN tunnel..."
-        sleep 2
-        ((attempt++))
-    done
-    
-    log "ERROR: VPN connection failed to establish within $((max_attempts * 2)) seconds" >&2
-    return 1
-}
-
-# =============================================================================
-# Start OpenVPN
-# =============================================================================
-
-log "Starting OpenVPN..."
-debug "OpenVPN arguments: ${openvpn_args[*]}"
-
-openvpn "${openvpn_args[@]}" &
-openvpn_pid=$!
-
-log "OpenVPN started with PID: $openvpn_pid"
-
-# Verify connection in background to avoid blocking
-(
-    sleep 5  # Give OpenVPN time to start
-    if ! verify_connection; then
-        log "Connection verification failed, killing OpenVPN process"
-        kill -TERM "$openvpn_pid" 2>/dev/null || true
-        exit 1
-    fi
-) &
-
-wait $openvpn_pid
+log "Starting OpenVPN: openvpn ${openvpn_args[*]}"
+exec openvpn "${openvpn_args[@]}"

@@ -5,7 +5,11 @@ on:
     tags:
     - 'v[0-9]+.[0-9]+.[0-9]+'
   schedule:
-    - cron: '0 6 * * 1'  # Mondays 06:00 UTC — refresh base image patches
+    # Refresh base image patches on the 1st and 15th. Not weekly: a consumer
+    # that waits 7 days before adopting a new :latest would never see a
+    # weekly build old enough. GitHub disables this schedule after 60 days
+    # without a commit; `gh workflow enable build.yaml` resumes it.
+    - cron: '0 6 1,15 * *'
   workflow_dispatch:
 
 jobs:
@@ -48,28 +52,19 @@ jobs:
       id: tags
       uses: docker/metadata-action@v6
       with:
+        context: git   # labels name the checked-out tag's commit, also on scheduled runs
         images: ghcr.io/dj-mcculloch/openvpn-client
         tags: |
           type=semver,pattern={{version}},value=${{ steps.target.outputs.tag }}
           type=semver,pattern={{major}}.{{minor}},value=${{ steps.target.outputs.tag }}
           type=semver,pattern={{major}},value=${{ steps.target.outputs.tag }},enable=${{ !startsWith(steps.target.outputs.tag, 'v0.') }}
 
-    - name: Set build arguments
-      id: build-args
-      run: |
-        patch=${{ steps.target.outputs.tag }}
-        patch=${patch#v}
-        echo "date=$(date --utc --iso-8601=seconds)" >> $GITHUB_OUTPUT
-        echo "version=$patch" >> $GITHUB_OUTPUT
-
     - name: Build and push Docker image
       uses: docker/build-push-action@v7
       with:
         context: ./build
         platforms: linux/amd64,linux/arm64
-        build-args: |
-          BUILD_DATE=${{ steps.build-args.outputs.date }}
-          IMAGE_VERSION=${{ steps.build-args.outputs.version }}
+        labels: ${{ steps.tags.outputs.labels }}
         tags: ${{ steps.tags.outputs.tags }}
         push: true
 
